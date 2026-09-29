@@ -1,0 +1,24 @@
+{
+  "name": "ViewportStencil Dev",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$ignoreUnknownInstances": true,
+      "ViewportStencil": {
+        "$path": "src"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$ignoreUnknownInstances": true,
+        "Example": {
+          "$path": "example/Example.client.lua"
+        }
+      }
+    }
+  }
+}

@@ -1,35 +1,24 @@
 --!strict
---[[
-	Renderer
-
-	Keeps the list of active stencils and updates all of them once per frame, right after the default camera scripts,
-	so every viewport uses this frame's camera CFrame (updating any earlier makes the viewports lag a frame behind and
-	jitter while the camera moves).
-
-	The render step is only bound while there is at least one active stencil.
-]]
+-- Updates every active stencil once per frame. Runs right after the camera scripts: any earlier and the viewports
+-- use last frame's camera, which makes them lag behind and jitter while the camera moves.
 
 local RunService = game:GetService("RunService")
 
--- Per-frame camera data shared by every stencil. A single table is reused every frame.
 export type FrameState = {
 	cameraCFrame: CFrame,
 	cameraPosition: Vector3,
 	viewportHeight: number,
 
-	-- Frustum half-extents: tan of half the horizontal/vertical FOV, and the matching secants (used to expand the
-	-- frustum planes by a bounding sphere's radius)
+	-- tan of half the horizontal/vertical FOV, and their secants, for frustum culling
 	tanX: number,
 	tanY: number,
 	secX: number,
 	secY: number,
 
-	-- Whether anything above changed since the previous frame. When false, stencils that haven't changed themselves
-	-- can skip their update entirely.
+	-- False when the camera is exactly as it was last frame
 	changed: boolean,
 }
 
--- Anything the renderer can draw. Stencil implements this.
 export type Renderable = {
 	_render: (self: any, frame: FrameState) -> (),
 }
@@ -54,7 +43,6 @@ local frame: FrameState = {
 	changed = true,
 }
 
--- Values the frame state was last built from, to detect changes
 local lastCFrame: CFrame? = nil
 local lastViewportSize: Vector2? = nil
 local lastFieldOfView: number? = nil
@@ -99,10 +87,7 @@ local function renderAll()
 	end
 end
 
---[[
-	Adds an item and renders it right away, so it never shows a stale frame even if it's added after this frame's
-	render step already ran.
-]]
+-- Also renders the item right away, so it doesn't show a stale frame when added after this frame's render step.
 function Renderer.add(item: Renderable)
 	if indexOf[item] then
 		return
@@ -113,7 +98,7 @@ function Renderer.add(item: Renderable)
 
 	local camera = workspace.CurrentCamera
 	if camera then
-		-- Separate state so the shared one's change tracking isn't affected
+		-- Uses its own state so the shared one keeps tracking changes correctly
 		local state = table.clone(frame)
 		fillFrame(state, camera)
 		state.changed = true
@@ -132,7 +117,6 @@ function Renderer.remove(item: Renderable)
 		return
 	end
 
-	-- Swap with the last item so removal is O(1)
 	local last = active[#active]
 	active[index] = last
 	indexOf[last] = index
@@ -142,14 +126,10 @@ function Renderer.remove(item: Renderable)
 	if bound and #active == 0 then
 		bound = false
 		RunService:UnbindFromRenderStep(BIND_NAME)
-		-- Stencils added later must not assume they saw the last camera
 		lastCFrame = nil
 	end
 end
 
---[[
-	Returns a copy of the active list, so callers can destroy items while iterating it.
-]]
 function Renderer.getAll(): { Renderable }
 	return table.clone(active)
 end

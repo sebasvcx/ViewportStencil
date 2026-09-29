@@ -1,10 +1,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local Modules = ReplicatedStorage:WaitForChild("Modules")
 local Assets = ReplicatedStorage:WaitForChild("Assets")
 
-local ViewportStencil = require(Modules.ViewportStencil)
+local ViewportStencil = require(ReplicatedStorage:WaitForChild("ViewportStencil"))
 
 local LIFETIME = 10
 
@@ -18,7 +17,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		return
 	end
 
-	ViewportStencil.new(Assets.Crack["Model(neon1)"]:Clone(), cframe, { lifetime = LIFETIME })
+	ViewportStencil.new(Assets.Crack.CrackTest:Clone(), cframe, { lifetime = LIFETIME })
 
 	local vfx = Assets.Crack.VFX:Clone()
 	vfx.CFrame = cframe

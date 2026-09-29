@@ -1,16 +1,6 @@
 --!strict
---[[
-	RigPool
-
-	A rig is everything a stencil needs to be drawn: an invisible Part, a SurfaceGui on its Top face, a ViewportFrame
-	and the viewport's Camera. Rigs are pooled as a whole so creating and destroying stencils doesn't churn Instances.
-
-	Only properties that are the same for every stencil are set here. Anything a stencil can customize is set by the
-	stencil every time it acquires a rig, so nothing leaks from one stencil to the next.
-
-	The SurfaceGui lives in PlayerGui and is attached to the part through Adornee: ViewportFrames inside a SurfaceGui
-	that is parented to a part in Workspace don't render.
-]]
+-- Pool of rigs: the Part, SurfaceGui, ViewportFrame and Camera each stencil needs. Only properties shared by every
+-- stencil are set here; per-stencil options are applied by Stencil each time it takes a rig.
 
 local Players = game:GetService("Players")
 
@@ -23,8 +13,6 @@ export type Rig = {
 
 local RigPool = {}
 
--- Rigs kept around for reuse. Past this, released rigs are destroyed so a spike of stencils doesn't keep its memory
--- forever.
 local MAX_POOL_SIZE = 32
 
 local pool: { Rig } = {}
@@ -40,6 +28,8 @@ local function createRig(): Rig
 	part.CastShadow = false
 	part.Transparency = 1
 
+	-- The SurfaceGui has to live in PlayerGui and point at the part through Adornee: a ViewportFrame inside a
+	-- SurfaceGui parented to a part in Workspace doesn't render.
 	local surfaceGui = Instance.new("SurfaceGui")
 	surfaceGui.Face = Enum.NormalId.Top
 	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
@@ -69,9 +59,6 @@ local function createRig(): Rig
 	}
 end
 
---[[
-	Folder in Workspace that holds the parts of every active stencil. Created on first use.
-]]
 function RigPool.getContainer(): Folder
 	local current = container
 	if current and current.Parent then
@@ -85,25 +72,20 @@ function RigPool.getContainer(): Folder
 	return folder
 end
 
---[[
-	Returns a rig that is not parented anywhere. The caller is responsible for parenting `rig.part`.
-]]
+-- The returned rig's part is unparented and its SurfaceGui disabled.
 function RigPool.acquire(): Rig
 	while true do
 		local rig = table.remove(pool)
 		if not rig then
 			return createRig()
 		end
-		-- Skip rigs whose SurfaceGui was destroyed from outside while pooled
+		-- Its SurfaceGui may have been destroyed while it was pooled
 		if rig.surfaceGui.Parent then
 			return rig
 		end
 	end
 end
 
---[[
-	Returns a rig to the pool. The rig must not be used by the caller afterwards.
-]]
 function RigPool.release(rig: Rig)
 	if #pool >= MAX_POOL_SIZE then
 		rig.surfaceGui:Destroy()
@@ -111,8 +93,7 @@ function RigPool.release(rig: Rig)
 		return
 	end
 
-	-- If the rig was destroyed from outside (e.g. someone destroyed the container), its Parent is locked and it
-	-- can't be reused, so just drop it.
+	-- Fails if the part was destroyed from outside (its Parent is locked), in which case it can't be reused
 	if pcall(function()
 		rig.surfaceGui.Enabled = false
 		rig.part.Parent = nil
