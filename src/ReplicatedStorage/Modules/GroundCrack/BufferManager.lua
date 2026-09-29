@@ -20,8 +20,8 @@ end
 
 function bufferManager:release(object)
 	table.insert(self.pool, object)
-	
-	object.Parent = script.Cache
+
+	object.Parent = nil
 end
 
 return bufferManager

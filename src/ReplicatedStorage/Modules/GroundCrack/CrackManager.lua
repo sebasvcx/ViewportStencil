@@ -18,9 +18,9 @@ function CrackManager:remove(crack)
 	end
 end
 
-function CrackManager:updateAllCameras()
+function CrackManager:updateAllCameras(camera)
 	for _, crack in ipairs(ActiveCracks) do
-		crack:updateCamera()
+		crack:updateCamera(camera)
 	end
 end
 
