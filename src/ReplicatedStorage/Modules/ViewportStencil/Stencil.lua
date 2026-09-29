@@ -19,6 +19,7 @@ local RigPool = require(script.Parent.RigPool)
 local Types = require(script.Parent.Types)
 
 type Rig = RigPool.Rig
+type FrameState = Renderer.FrameState
 type StencilOptions = Types.StencilOptions
 
 -- How far above the stencil CFrame the surface is drawn, so it doesn't z-fight with the real surface.
@@ -48,6 +49,7 @@ type StencilData = {
 	_modelOffset: CFrame,
 	_layerOffset: number,
 	_transparency: number,
+	_maxDistance: number,
 	_destroyModel: boolean,
 	_destroyed: boolean,
 	_lifetimeThread: thread?,
@@ -56,10 +58,15 @@ type StencilData = {
 	_surfaceCFrame: CFrame,
 	_surfaceSize: Vector2,
 	_viewRotation: CFrame,
+	-- Bounding sphere of the surface, for culling
+	_center: Vector3,
+	_radius: number,
 
 	-- Last values written to the rig, to avoid redundant property writes
 	_canvasHeight: number,
 	_visible: boolean,
+	-- The stencil changed since its last render, so it must update even if the camera didn't move
+	_dirty: boolean,
 }
 
 export type Stencil = typeof(setmetatable({} :: StencilData, Stencil))
@@ -118,6 +125,7 @@ function Stencil.new(model: Model, cframe: CFrame, options: StencilOptions?): St
 		_modelOffset = modelOffset,
 		_layerOffset = SURFACE_OFFSET + layerCounter * LAYER_STEP,
 		_transparency = opts.transparency or 0,
+		_maxDistance = opts.maxDistance or DEFAULT_MAX_DISTANCE,
 		_destroyModel = if opts.destroyModel == nil then true else opts.destroyModel,
 		_destroyed = false,
 		_lifetimeThread = nil,
@@ -125,16 +133,20 @@ function Stencil.new(model: Model, cframe: CFrame, options: StencilOptions?): St
 		_surfaceCFrame = CFrame.identity,
 		_surfaceSize = Vector2.one,
 		_viewRotation = CFrame.identity,
+		_center = Vector3.zero,
+		_radius = 0,
 
+		-- Pooled rigs come disabled; the first render enables it if it's in view
 		_canvasHeight = -1,
-		_visible = true,
+		_visible = false,
+		_dirty = true,
 	}
 	local self = setmetatable(data, Stencil)
 
 	-- Everything a stencil can customize is set here, every time, so nothing leaks from a previous user of the rig
 	local surfaceGui = rig.surfaceGui
-	surfaceGui.Enabled = true
-	surfaceGui.MaxDistance = opts.maxDistance or DEFAULT_MAX_DISTANCE
+	-- Distance culling is done by the stencil itself (so hidden stencils also skip their updates)
+	surfaceGui.MaxDistance = 0
 	surfaceGui.Brightness = opts.brightness or 1
 	surfaceGui.LightInfluence = opts.lightInfluence or 1
 
@@ -146,16 +158,9 @@ function Stencil.new(model: Model, cframe: CFrame, options: StencilOptions?): St
 
 	model.Parent = viewport
 	self:_applyTransform()
-
-	-- Render once right away: if this runs after the Renderer this frame, the rig would otherwise show a frame with
-	-- whatever layout its previous user left behind
-	local camera = workspace.CurrentCamera
-	if camera then
-		self:_render(camera.CFrame, camera.ViewportSize.Y)
-	end
 	rig.part.Parent = RigPool.getContainer()
 
-	-- Luau can't match a metatable type against a table type structurally, hence the casts to the Renderer
+	-- Renders right away. Luau can't match a metatable type against a table type structurally, hence the casts.
 	Renderer.add(self :: any)
 
 	local lifetime = opts.lifetime
@@ -271,23 +276,56 @@ function Stencil._applyTransform(self: Stencil)
 	self._surfaceCFrame = surfaceCFrame
 	self._surfaceSize = surfaceSize
 	self._viewRotation = Projection.getViewRotation(surfaceCFrame)
-	-- Force the canvas to be resized on the next render
+	self._center = surfaceCFrame.Position
+	self._radius = surfaceSize.Magnitude / 2
+
+	-- Force a full update (including the canvas size) on the next render
 	self._canvasHeight = -1
+	self._dirty = true
+end
+
+--[[
+	Whether the surface's bounding sphere is inside the camera frustum and within `maxDistance`.
+]]
+function Stencil._isInView(self: Stencil, frame: FrameState): boolean
+	local center = frame.cameraCFrame:PointToObjectSpace(self._center)
+	local radius = self._radius
+
+	if center.Magnitude - radius > self._maxDistance then
+		return false
+	end
+
+	-- The camera looks along -Z. Each side plane passes through the camera, so the sphere is outside a plane when its
+	-- center is more than `radius` away from it; `sec` converts that distance to an offset along X/Y.
+	local depth = -center.Z
+	return depth > -radius
+		and math.abs(center.X) <= depth * frame.tanX + radius * frame.secX
+		and math.abs(center.Y) <= depth * frame.tanY + radius * frame.secY
 end
 
 --[[
 	Called by the Renderer once per frame.
 ]]
-function Stencil._render(self: Stencil, cameraCFrame: CFrame, viewportHeight: number)
+function Stencil._render(self: Stencil, frame: FrameState)
+	-- Neither the camera nor the stencil changed: last frame's layout (or hidden state) is still correct
+	if not (frame.changed or self._dirty) then
+		return
+	end
+	self._dirty = false
+
 	local rig = self._rig
-	local cameraPosition = cameraCFrame.Position
+	local cameraPosition = frame.cameraPosition
 	local surfaceSize = self._surfaceSize
 
-	local offsetX, offsetY, scale, fov, factor, distance =
-		Projection.solve(cameraPosition, self._surfaceCFrame, surfaceSize)
+	local visible = self:_isInView(frame)
+	local offsetX, offsetY, scale, fov, factor, distance = 0, 0, 1, 1, 1, 0
+	if visible then
+		offsetX, offsetY, scale, fov, factor, distance = Projection.solve(cameraPosition, self._surfaceCFrame, surfaceSize)
+		-- Seen from behind (e.g. the camera is under the floor) the projection is meaningless, so just hide it
+		visible = distance > 0
+	end
 
-	-- Seen from behind (e.g. the camera is under the floor) the projection is meaningless, so just hide it
-	local visible = distance > 0
+	-- Disabling the SurfaceGui also stops its ViewportFrame from rendering, which is where most of the cost is
 	if visible ~= self._visible then
 		self._visible = visible
 		rig.surfaceGui.Enabled = visible
@@ -296,6 +334,7 @@ function Stencil._render(self: Stencil, cameraCFrame: CFrame, viewportHeight: nu
 		return
 	end
 
+	local viewportHeight = frame.viewportHeight
 	if viewportHeight ~= self._canvasHeight then
 		self._canvasHeight = viewportHeight
 		rig.surfaceGui.CanvasSize = Vector2.new(viewportHeight * surfaceSize.X / surfaceSize.Y, viewportHeight)

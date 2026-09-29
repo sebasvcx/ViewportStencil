@@ -24,7 +24,8 @@ export type StencilOptions = {
 	-- Transparency of the whole stencil (ViewportFrame.ImageTransparency). Defaults to 0.
 	transparency: number?,
 
-	-- SurfaceGui.MaxDistance. Defaults to 1000.
+	-- The stencil is hidden (and stops updating) when the camera is farther than this from it, in studs. Defaults to
+	-- 1000.
 	maxDistance: number?,
 
 	-- SurfaceGui.Brightness. Defaults to 1.

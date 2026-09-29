@@ -23,6 +23,10 @@ export type Rig = {
 
 local RigPool = {}
 
+-- Rigs kept around for reuse. Past this, released rigs are destroyed so a spike of stencils doesn't keep its memory
+-- forever.
+local MAX_POOL_SIZE = 32
+
 local pool: { Rig } = {}
 local container: Folder? = nil
 
@@ -101,6 +105,12 @@ end
 	Returns a rig to the pool. The rig must not be used by the caller afterwards.
 ]]
 function RigPool.release(rig: Rig)
+	if #pool >= MAX_POOL_SIZE then
+		rig.surfaceGui:Destroy()
+		rig.part:Destroy()
+		return
+	end
+
 	-- If the rig was destroyed from outside (e.g. someone destroyed the container), its Parent is locked and it
 	-- can't be reused, so just drop it.
 	if pcall(function()
