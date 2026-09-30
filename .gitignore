@@ -6,3 +6,4 @@ Packages/
 *.rbxlx.lock
 *.blend1
 build/
+*.mp4

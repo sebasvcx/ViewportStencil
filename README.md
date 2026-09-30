@@ -4,6 +4,8 @@ ViewportStencil renders a model *inside* a surface in Roblox: ground cracks, hol
 walls. No geometry is cut or destroyed. A ViewportFrame drawn on the surface displays the model with a perspective
 projection that matches the player's camera, so the surface appears to open into the model from any viewing angle.
 
+https://github.com/user-attachments/assets/327176e7-4088-4e5a-ae76-2bd95e788072
+
 ![A crack in a wall and another in the floor, both rendered with ViewportStencil](docs/images/demo.png)
 
 ## Contents
