@@ -1,149 +1,225 @@
 # ViewportStencil
 
-Render models *inside* surfaces in Roblox: ground cracks, holes, craters, portals, windows into walls. Nothing is cut or
-destroyed: a ViewportFrame on the surface shows the model as if you were looking through the surface into it, from any
-camera angle.
+ViewportStencil renders a model *inside* a surface in Roblox: ground cracks, holes, craters, portals or openings in
+walls. No geometry is cut or destroyed. A ViewportFrame drawn on the surface displays the model with a perspective
+projection that matches the player's camera, so the surface appears to open into the model from any viewing angle.
 
 ![A crack in a wall and another in the floor, both rendered with ViewportStencil](docs/images/demo.png)
+
+## Contents
+
+- [How it works](#how-it-works)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [API reference](#api-reference)
+- [Making a model](#making-a-model)
+- [Lighting](#lighting)
+- [Performance](#performance)
+- [Limitations](#limitations)
+- [Example](#example)
+- [Development](#development)
+- [Credits](#credits)
+- [License](#license)
 
 ## How it works
 
 ViewportStencil combines two existing techniques:
 
-- **[rbx-viewport-window](https://github.com/EgoMoose/rbx-viewport-window)** by EgoMoose: an off-axis projection that
-  makes a ViewportFrame on a SurfaceGui line up with the world behind it, so it looks like a window instead of a flat
-  image.
-- **[ViewportFrame masking](https://devforum.roblox.com/t/viewportframe-masking/2964839)**: faces whose vertex alpha
-  has been erased render invisible inside a ViewportFrame, but still hide whatever is behind them. The model carries its
-  own mask: a flat plane around the opening with erased alpha. Through the mask you see the real ground, and the rest of
-  the model only shows through the opening.
+- **Off-axis projection**, from [rbx-viewport-window](https://github.com/EgoMoose/rbx-viewport-window) by EgoMoose.
+  An invisible part carries a SurfaceGui with a ViewportFrame. Every frame, the ViewportFrame's camera is placed at
+  the player's camera position and given an off-axis projection, so the image lines up with the surface and behaves
+  like a window rather than a flat picture.
+- **ViewportFrame masking**, described in
+  [this DevForum post](https://devforum.roblox.com/t/viewportframe-masking/2964839). Inside a ViewportFrame, faces
+  whose vertex alpha has been erased are not drawn, but they still occlude the geometry behind them. Each model
+  includes a flat mask plane with erased alpha around its opening. Where the mask is, the ViewportFrame is
+  transparent and the real surface shows through; the rest of the model is only visible through the opening.
 
-The mask is part of the mesh, so each model defines its own shape. See [Making a model](#making-a-model).
+Because the mask is part of the mesh, every model defines its own shape. See [Making a model](#making-a-model).
 
 ## Installation
 
-**Wally**
+You don't need a GitHub account to download ViewportStencil. Choose one of the options below.
+
+### Option 1: Model file (recommended)
+
+1. Open the [latest release](https://github.com/sebasvcx/ViewportStencil/releases/latest).
+2. Under **Assets**, click `ViewportStencil.rbxm` to download it.
+3. In Roblox Studio, open the **Explorer** window, right-click **ReplicatedStorage** and choose
+   **Insert from File...**. Select the downloaded `ViewportStencil.rbxm`.
+4. Check that `ReplicatedStorage` now contains a ModuleScript named `ViewportStencil`, with the child modules
+   `Projection`, `Renderer`, `RigPool`, `Stencil`, `Types` and `Utils`.
+
+The module has to be somewhere LocalScripts can reach. `ReplicatedStorage` is the standard location.
+
+### Option 2: Wally
+
+If your project uses [Rojo](https://rojo.space) and [Wally](https://wally.run), add the dependency to your
+`wally.toml`:
 
 ```toml
 [dependencies]
 ViewportStencil = "sebasvcx/viewport-stencil@1.0.1"
 ```
 
-**Manually**: download `ViewportStencil.rbxm` from the Releases page and put it in `ReplicatedStorage`.
+Then run `wally install`.
 
-**Just want to try it?** Download `ViewportStencil-Demo.rbxl` from the Releases page, open it in Studio and press Play.
+### Option 3: Demo place
+
+To try it without setting anything up, download `ViewportStencil-Demo.rbxl` from the
+[latest release](https://github.com/sebasvcx/ViewportStencil/releases/latest), open it in Studio and press **Play**.
 See [Example](#example).
 
-## Example
+### Updating
 
-The [Releases page](../../releases) has a demo place, `ViewportStencil-Demo.rbxl`, ready to play: click anywhere
-(floor or wall) to spawn a crack that disappears after 10 seconds.
+The version is written at the top of the `ViewportStencil` ModuleScript. To update, delete the old module and insert
+the new `ViewportStencil.rbxm` from the latest release, or change the version in your `wally.toml`. Check the
+[release notes](https://github.com/sebasvcx/ViewportStencil/releases) for changes that may affect your code.
 
-What's in the demo:
+## Quick start
 
-- `ReplicatedStorage.ViewportStencil`: the module.
-- `ReplicatedStorage.Assets.Crack.CrackTest`: the crack model from [`example/crack.blend`](example/crack.blend), set up as
-  described in [Making a model](#making-a-model).
-- `ReplicatedStorage.Assets.Crack.VFX`: particles and a purple light spawned with each crack. The light tints nearby
-  stencils; see [Lighting](#lighting).
-- `StarterPlayerScripts.Example`: the script that spawns the cracks, [`example/Example.client.lua`](example/Example.client.lua).
-
-In this repo, `example/` has the demo script and the Blender file for the crack.
-
-## Usage
-
-ViewportStencil only runs on the client.
+ViewportStencil runs on the client only, so it must be required from a LocalScript (for example, one in
+`StarterPlayerScripts`).
 
 ```lua
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ViewportStencil = require(ReplicatedStorage.ViewportStencil)
 
-local crack = ReplicatedStorage.Crack -- a Model
+local crack = ReplicatedStorage.Crack -- a Model prepared as described in "Making a model"
 
--- A CFrame on whatever the mouse is pointing at, randomly rotated around the surface normal
+-- A CFrame on the surface under the mouse, rotated randomly around the surface normal
 local cframe = ViewportStencil.Utils.fromMouse(nil, nil, math.random() * 2 * math.pi)
 if cframe then
 	ViewportStencil.new(crack:Clone(), cframe, { lifetime = 10 })
 end
 ```
 
-The stencil takes ownership of the model (it's destroyed along with the stencil), so pass a clone.
+Two things to keep in mind:
 
-Stencils work on any surface. The CFrame is a point on the surface, with its UpVector along the surface normal. The
-`Utils` functions build it from a raycast, so walls and ceilings work the same as floors.
+- The stencil takes ownership of the model: it is parented into the stencil's ViewportFrame and destroyed along with
+  the stencil. Always pass a clone.
+- The stencil's CFrame is a point on the surface whose UpVector is the surface normal. The `Utils` functions build this
+  CFrame from a raycast, so floors, walls, ceilings and slopes are all handled the same way.
 
-## API
+## API reference
 
-### `ViewportStencil.new(model: Model, cframe: CFrame, options: StencilOptions?): Stencil`
+### ViewportStencil
+
+#### `ViewportStencil.new(model: Model, cframe: CFrame, options: StencilOptions?): Stencil`
 
 Creates a stencil that renders `model` inside the surface at `cframe`.
 
-| Option | Default | |
+| Parameter | Type | Description |
 | --- | --- | --- |
-| `size: Vector2` | 90% of the model's footprint | Surface size in studs, along the CFrame's X and Z axes. The model is clipped outside it. |
-| `lifetime: number` | never | Seconds until the stencil destroys itself. |
-| `destroyModel: boolean` | `true` | When `false`, the model is unparented instead of destroyed. |
-| `transparency: number` | `0` | Transparency of the whole stencil. |
-| `maxDistance: number` | `1000` | Hidden beyond this distance from the camera. |
-| `brightness: number` | `1` | `SurfaceGui.Brightness` |
-| `lightInfluence: number` | `1` | `SurfaceGui.LightInfluence` |
-| `ambient: Color3` | white | `ViewportFrame.Ambient` |
-| `lightColor: Color3` | `(140, 140, 140)` | `ViewportFrame.LightColor` |
-| `lightDirection: Vector3` | `(-1, -1, -1)` | `ViewportFrame.LightDirection` |
+| `model` | `Model` | The model to render. Must contain at least one BasePart. The stencil takes ownership of it. |
+| `cframe` | `CFrame` | A point on the surface. Its UpVector must point out of the surface (along the surface normal). |
+| `options` | `StencilOptions?` | Optional settings. See below. |
 
-### `Stencil`
+Throws an error if called on the server, if `model` is not a Model or has no parts, or if `cframe` is not a CFrame.
 
-| | |
+**StencilOptions**
+
+All fields are optional.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `size` | `Vector2` | 90% of the model's footprint | Size of the stencil surface in studs, along the CFrame's X and Z axes. Anything outside it is clipped. See [In Studio](#in-studio). |
+| `lifetime` | `number` | `nil` (no automatic destruction) | Seconds after which the stencil destroys itself. Destroying it earlier cancels the timer. |
+| `destroyModel` | `boolean` | `true` | Whether destroying the stencil also destroys the model. When `false`, the model is unparented instead, so it can be reused. |
+| `transparency` | `number` | `0` | Transparency of the whole stencil, from `0` (opaque) to `1` (invisible). Sets `ViewportFrame.ImageTransparency`. |
+| `maxDistance` | `number` | `1000` | Distance from the camera, in studs, beyond which the stencil is hidden and stops updating. |
+| `brightness` | `number` | `1` | `SurfaceGui.Brightness`. See [Lighting](#lighting). |
+| `lightInfluence` | `number` | `1` | `SurfaceGui.LightInfluence`: how much world lighting affects the stencil. See [Lighting](#lighting). |
+| `ambient` | `Color3` | `Color3.new(1, 1, 1)` | `ViewportFrame.Ambient`. |
+| `lightColor` | `Color3` | `Color3.fromRGB(140, 140, 140)` | `ViewportFrame.LightColor`. |
+| `lightDirection` | `Vector3` | `Vector3.new(-1, -1, -1)` | `ViewportFrame.LightDirection`: the direction the light travels, in world space. |
+
+#### `ViewportStencil.getActive(): { Stencil }`
+
+Returns every stencil that has not been destroyed. The returned table is a copy, so stencils can be destroyed while
+iterating over it.
+
+#### `ViewportStencil.destroyAll()`
+
+Destroys every active stencil. Equivalent to calling `destroy()` on each stencil returned by `getActive()`.
+
+#### Types
+
+The module exports its types for use in typed code:
+
+```lua
+local ViewportStencil = require(ReplicatedStorage.ViewportStencil)
+
+type Stencil = ViewportStencil.Stencil
+type StencilOptions = ViewportStencil.StencilOptions
+```
+
+### Stencil
+
+The object returned by `ViewportStencil.new`.
+
+| Member | Description |
 | --- | --- |
-| `stencil.model` | The model being rendered. Don't reparent it. |
-| `stencil:setCFrame(cframe)` / `getCFrame()` | Moves the stencil. |
-| `stencil:setSize(size: Vector2)` / `getSize()` | Resizes the surface. |
-| `stencil:setTransparency(t)` / `getTransparency()` | Useful to fade it out before destroying it. |
-| `stencil:destroy()` | Also `:Destroy()`, so it works with Maid, Janitor, Trove... Safe to call more than once. |
-| `stencil:isDestroyed()` | |
+| `stencil.model: Model` | The model being rendered. Read-only: don't reparent or destroy it while the stencil is active. |
+| `stencil:setCFrame(cframe: CFrame)` | Moves the stencil. `cframe` follows the same convention as in `new`. |
+| `stencil:getCFrame(): CFrame` | Returns the stencil's current CFrame. |
+| `stencil:setSize(size: Vector2)` | Resizes the stencil surface, in studs along the CFrame's X and Z axes. |
+| `stencil:getSize(): Vector2` | Returns the current surface size. |
+| `stencil:setTransparency(transparency: number)` | Sets the transparency of the whole stencil. Useful for fading it out before destroying it. |
+| `stencil:getTransparency(): number` | Returns the current transparency. |
+| `stencil:destroy()` | Destroys the stencil and, unless `destroyModel` is `false`, its model. Calling it more than once has no effect. Also available as `stencil:Destroy()`, so stencils can be given to Maid, Janitor, Trove and similar cleanup utilities. |
+| `stencil:isDestroyed(): boolean` | Returns `true` once the stencil has been destroyed. |
 
-### `ViewportStencil`
+Calling `setCFrame`, `setSize` or `setTransparency` on a destroyed stencil has no effect and prints a warning.
 
-| | |
+### ViewportStencil.Utils
+
+Helpers that return a CFrame ready to pass to `ViewportStencil.new`: a point on a surface, with its UpVector along the
+surface normal. The functions that raycast return `nil` if nothing is hit.
+
+Common parameters:
+
+- `angle: number?`: rotation around the surface normal, in radians. Pass `math.random() * 2 * math.pi` for a random
+  rotation. Defaults to no rotation.
+- `params: RaycastParams?`: raycast parameters. Defaults to excluding the local player's character.
+
+| Function | Description |
 | --- | --- |
-| `getActive(): { Stencil }` | Every stencil that hasn't been destroyed. |
-| `destroyAll()` | |
-
-### `ViewportStencil.Utils`
-
-All of these return a CFrame ready for `new`, or `nil` if nothing was hit. `angle` (radians) spins the stencil around
-the surface normal. `params` defaults to ignoring the local player's character.
-
-| | |
-| --- | --- |
-| `fromMouse(params?, maxDistance?, angle?)` | Whatever is under the mouse. |
-| `fromScreenPoint(x, y, params?, maxDistance?, angle?)` | Whatever is under a point in viewport coordinates. |
-| `belowCharacter(character?, maxDistance?, angle?)` | The ground under a character (the local player's by default). |
-| `raycast(origin, direction, params?, angle?)` | Whatever the ray hits. |
-| `fromRaycastResult(result, angle?)` | |
-| `fromNormal(position, normal, angle?)` | |
+| `fromMouse(params?, maxDistance?, angle?): CFrame?` | Raycasts from the camera through the mouse position. `maxDistance` defaults to `1000` studs. |
+| `fromScreenPoint(x, y, params?, maxDistance?, angle?): CFrame?` | Raycasts from the camera through a point on the screen, in viewport coordinates (the same space as `UserInputService:GetMouseLocation()`). `maxDistance` defaults to `1000` studs. |
+| `belowCharacter(character?, maxDistance?, angle?): CFrame?` | Raycasts straight down from a character's HumanoidRootPart. `character` defaults to the local player's character, and `maxDistance` to `10` studs. The character itself is always excluded. |
+| `raycast(origin, direction, params?, angle?): CFrame?` | Raycasts from `origin` along `direction`. The length of `direction` is the maximum distance. |
+| `fromRaycastResult(result: RaycastResult, angle?): CFrame` | Converts an existing `RaycastResult` into a stencil CFrame, using its `Position` and `Normal`. |
+| `fromNormal(position: Vector3, normal: Vector3, angle?): CFrame` | Builds a stencil CFrame from a position and a surface normal. A normal of `(0, 1, 0)` gives an unrotated CFrame. |
 
 ## Making a model
 
-A model is a mesh with two parts: the **mask**, a flat plane on top with a hole in it, and the **visible part**, what
-you see through the hole (the walls and bottom of a crack, for example). This walks through a ground crack in Blender;
-the finished file is in [`example/crack.blend`](example/crack.blend). The
-[DevForum post](https://devforum.roblox.com/t/viewportframe-masking/2964839) explains the masking and the erased-alpha
-vertex paint in more detail.
+A stencil model is a mesh made of two parts:
+
+- **The mask**: a flat plane on top, with the opening cut out of it. Its vertex alpha is erased, so it is not drawn,
+  but it hides the rest of the model everywhere except through the opening.
+- **The visible part**: the geometry seen through the opening, such as the walls and bottom of a crack.
+
+The steps below build a ground crack in Blender. The finished file is
+[`example/crack.blend`](example/crack.blend). The
+[DevForum post on ViewportFrame masking](https://devforum.roblox.com/t/viewportframe-masking/2964839) covers the
+masking technique and erased-alpha vertex painting in more detail.
 
 ### In Blender
 
-**1.** Model the mesh: a flat plane with the opening cut out, and the geometry that goes below it.
+**1.** Model the mesh: a flat plane with the opening cut out, and the geometry below it.
 
 ![Initial mesh](docs/images/blender/01-initial-mesh.png)
 
-**2.** Separate it into two parts: the mask (the plane) and the visible part (everything below). Vertex colors are
-stored per vertex, so if they shared vertices, erasing the mask's alpha would also fade the edges of the visible part.
+**2.** Separate the mesh into two objects: the mask (the plane) and the visible part (everything below it). Vertex
+colors are stored per vertex, so if both parts shared vertices along the edge of the opening, erasing the mask's alpha
+would also fade the edges of the visible part.
 
 ![Separated mesh](docs/images/blender/02-separate-mesh.png)
 
-To see the erased alpha while painting, give the mesh a material with a **Color Attribute** node whose **Alpha** output
-goes into the **Base Color** of the Principled BSDF, and switch the viewport shading to **Material Preview**.
+To preview the erased alpha while painting, give the mesh a material with a **Color Attribute** node, connect its
+**Alpha** output to the **Base Color** input of the Principled BSDF, and set the viewport shading to
+**Material Preview**.
 
 ![Color Attribute node](docs/images/blender/03-color-attribute-node.png)
 
@@ -157,58 +233,63 @@ goes into the **Base Color** of the Principled BSDF, and switch the viewport sha
 
 ![Erase Alpha](docs/images/blender/06-erase-alpha.png)
 
-**5.** Paint over the whole mask plane. Any part you miss will be visible in game.
+**5.** Paint over the entire mask plane. Any area left unpainted will be visible in game.
 
 ![Painting the mask](docs/images/blender/07-paint-progress.png)
 
-**6.** When you're done, the whole mask should look black with the material from step 2, and the visible part should
-be untouched.
+**6.** With the preview material from step 2, the finished mask appears black and the visible part stays unchanged.
 
 ![Finished mask](docs/images/blender/08-paint-finished.png)
 
-**7.** Export both objects together as one FBX (no need to join them in Blender), then import the FBX into Studio as a
-single mesh, so both parts end up in one MeshPart.
+**7.** Export both objects together as a single FBX file. They don't need to be joined in Blender. Import the FBX into
+Studio as a single mesh, so both parts end up in one MeshPart.
 
 ### In Studio
 
-Put the imported MeshPart in a `Model` and set it as the model's `PrimaryPart`:
+Place the imported MeshPart inside a `Model` and set it as the model's `PrimaryPart`:
 
 ```
 Crack (Model, PrimaryPart = Crack)
 └── Crack (MeshPart)
 ```
 
-- The **top of the `PrimaryPart`** is placed flush with the surface, so the mask plane must be the highest point of the
-  mesh. Without a `PrimaryPart`, the top of the model's bounding box is used.
-- The model's **up** is its `PrimaryPart`'s UpVector (world up without a `PrimaryPart`), aligned with the surface normal.
-- Keep the opening centered on the mesh: the surface is centered on the stencil's CFrame.
-- By default the surface is 90% of the model's footprint. Leaving the mask's outer edges out of the surface hides a
-  thin line of light that otherwise shows along them. If you pass your own `size`, keep it a bit smaller than the mask.
-- Keep the mask tight around the opening. The viewport's pixels are spread over the whole surface, so a lot of empty
-  mask around a small crack makes it blurrier.
-- Anything else in the model (extra parts, effects) works as long as it stays below the mask.
+The stencil positions the model as follows:
+
+- **Height**: the top face of the `PrimaryPart` is placed flush with the surface, so the mask plane must be the highest
+  point of the mesh. If the model has no `PrimaryPart`, the top of its bounding box is used.
+- **Orientation**: the `PrimaryPart`'s UpVector is aligned with the surface normal. Without a `PrimaryPart`, world up
+  is used.
+- **Centering**: the surface is centered on the stencil's CFrame, so the opening should be centered on the mesh.
+
+Guidelines for the surface size:
+
+- By default the surface is 90% of the model's footprint. Keeping the mask's outer edges outside the surface prevents
+  a thin line of light from appearing along them. If you set `size` yourself, keep it slightly smaller than the mask.
+- Keep the mask tight around the opening. The ViewportFrame's resolution is spread over the whole surface, so a large
+  mask around a small opening makes the result blurrier.
+
+Additional parts or effects can be added to the model, as long as they stay below the mask.
 
 ## Lighting
 
-A stencil is lit in two separate layers, and both change how the model looks:
+A stencil is lit in two independent layers, and both affect its final appearance:
 
-1. **The ViewportFrame's own lighting.** Objects inside a ViewportFrame don't use `Lighting` or any lights in the
-   world. They only get the ViewportFrame's `Ambient` light and one directional light (`LightColor` and
-   `LightDirection`). This is where the model gets its shading.
-2. **World lighting on the SurfaceGui.** Once the ViewportFrame's image is drawn on the surface, the SurfaceGui is lit
-   by the world like any other surface, scaled by `LightInfluence`. With `lightInfluence = 1`, a colored light near the
-   stencil tints it. With `0`, it ignores world lighting and shows the ViewportFrame's image as is.
+1. **ViewportFrame lighting.** Objects inside a ViewportFrame are not affected by the `Lighting` service or by lights
+   in the world. They are lit only by the ViewportFrame's `Ambient` color and a single directional light
+   (`LightColor`, `LightDirection`). This layer determines the model's shading.
+2. **World lighting on the SurfaceGui.** The image produced by the ViewportFrame is displayed on a SurfaceGui, which
+   is lit by the world like any other surface, scaled by `LightInfluence`. With `lightInfluence = 1`, colored lights
+   near the stencil tint it. With `lightInfluence = 0`, world lighting is ignored.
 
-`brightness` (`SurfaceGui.Brightness`) multiplies the final result. It's useful for glowing effects.
+`brightness` (`SurfaceGui.Brightness`) multiplies the final result, which is useful for glowing effects.
 
-The defaults (white `ambient`, `lightInfluence = 1`) light the model evenly and let it pick up the world's lights. That
-suits glowing, magical cracks, but a plain grey mesh will look flat and bright, and will take the color of any nearby
-light.
+The defaults (white `ambient`, `lightInfluence = 1`) light the model evenly and let it pick up nearby lights. This
+suits glowing, stylized effects, but a plain grey mesh will look flat and will take on the color of any light near it.
 
-Some starting points:
+Example configurations:
 
 ```lua
--- Realistic hole: dark inside, lit from above, ignores world lights
+-- Realistic hole: dark interior, lit from above, unaffected by world lights
 ViewportStencil.new(model, cframe, {
 	ambient = Color3.fromRGB(60, 60, 60),
 	lightColor = Color3.fromRGB(200, 200, 200),
@@ -216,56 +297,80 @@ ViewportStencil.new(model, cframe, {
 	lightInfluence = 0,
 })
 
--- Glowing crack: fully lit and brighter than its surroundings
+-- Glowing crack: evenly lit and brighter than its surroundings
 ViewportStencil.new(model, cframe, {
 	ambient = Color3.new(1, 1, 1),
 	lightInfluence = 0,
 	brightness = 2,
 })
 
--- Blends with the scene: shaded by the viewport, tinted by nearby lights
+-- Blended with the scene: shaded by the ViewportFrame and tinted by nearby lights
 ViewportStencil.new(model, cframe, {
 	ambient = Color3.fromRGB(120, 120, 120),
 	lightInfluence = 1,
 })
 ```
 
-`lightDirection` is the direction the light travels, in world space: `(0, -1, 0)` shines straight down and lights
-upward-facing surfaces. The default `(-1, -1, -1)` comes diagonally from above.
+`lightDirection` is the direction the light travels, in world space. `(0, -1, 0)` points straight down and lights
+upward-facing surfaces; the default `(-1, -1, -1)` comes diagonally from above.
 
-The model's own colors, materials and textures still apply inside the ViewportFrame, with some limits: ViewportFrames
-don't render shadows or post-processing, and Neon and Glass render at the lowest quality, so Neon shows as a flat,
-bright color that doesn't glow or light up anything around it.
+The model's colors, materials and textures are rendered inside the ViewportFrame, with the ViewportFrame's usual
+restrictions: no shadows, no post-processing, and Neon and Glass rendered at the lowest quality. Neon appears as a
+flat, bright color; it does not glow or illuminate its surroundings.
 
 ## Performance
 
-- Only stencils that are on screen, within `maxDistance` and in front of their surface are rendered. The rest have
-  their SurfaceGui disabled and skip their per-frame update.
-- When the camera doesn't move, nothing is updated.
-- The real cost is the GPU rendering each visible ViewportFrame, so keep the number of stencils on screen reasonable
-  and the meshes simple.
+- Each stencil is tested every frame against the camera's view frustum, against `maxDistance`, and for whether the
+  camera is in front of its surface. Stencils that fail any test have their SurfaceGui disabled, which also stops
+  their ViewportFrame from rendering, and skip their per-frame update.
+- When neither the camera nor a stencil has changed since the previous frame, that stencil is not updated.
+- The per-frame update runs only while at least one stencil exists.
+- The dominant cost is GPU rendering of each visible ViewportFrame. Keep the number of stencils visible at the same
+  time reasonable, and keep the meshes simple.
 
 ## Limitations
 
 - Client only.
-- ViewportFrames have no anti-aliasing, so edges are slightly jagged.
-- The surface is a rectangle; the mask on the model is what gives it its shape.
-- Overlapping stencils don't merge: the one on top covers the other.
+- ViewportFrames are not anti-aliased, so edges can look slightly jagged.
+- The stencil surface is a rectangle; the model's mask defines the visible shape.
+- Overlapping stencils do not merge: the one on top covers the other.
+
+## Example
+
+The [latest release](https://github.com/sebasvcx/ViewportStencil/releases/latest) includes a demo place,
+`ViewportStencil-Demo.rbxl`. Press **Play** and click the floor or the wall to spawn a crack, which is removed after
+10 seconds.
+
+The demo place contains:
+
+| Instance | Description |
+| --- | --- |
+| `ReplicatedStorage.ViewportStencil` | The module. |
+| `ReplicatedStorage.Assets.Crack.CrackTest` | The crack model from [`example/crack.blend`](example/crack.blend), set up as described in [Making a model](#making-a-model). |
+| `ReplicatedStorage.Assets.Crack.VFX` | Particles and a purple PointLight spawned with each crack. The light tints nearby stencils; see [Lighting](#lighting). |
+| `StarterPlayerScripts.Example` | The LocalScript that spawns the cracks: [`example/Example.client.lua`](example/Example.client.lua). |
 
 ## Development
 
-```sh
-rojo serve dev.project.json
-```
+The repository is a [Rojo](https://rojo.space) project:
 
-`dev.project.json` syncs the library into `ReplicatedStorage.ViewportStencil` and the example from `example/` into
-`StarterPlayerScripts`. `default.project.json` is just the library, used for Wally and `rojo build`.
+| Path | Contents |
+| --- | --- |
+| `src/` | The module. |
+| `example/` | The demo LocalScript and the Blender file for the demo crack. |
+| `docs/images/` | Images used in this README. |
+| `default.project.json` | The module only. Used by Wally and to build `ViewportStencil.rbxm`. |
+| `dev.project.json` | A test place: syncs the module into `ReplicatedStorage.ViewportStencil` and the demo script into `StarterPlayerScripts`. |
+
+To work on the module, run `rojo serve dev.project.json` and connect from the Rojo plugin in Studio. To build the
+model file, run `rojo build default.project.json -o ViewportStencil.rbxm`.
 
 ## Credits
 
-- [EgoMoose](https://github.com/EgoMoose) for [rbx-viewport-window](https://github.com/EgoMoose/rbx-viewport-window).
-- [ViewportFrame masking](https://devforum.roblox.com/t/viewportframe-masking/2964839) on the DevForum.
+- [EgoMoose](https://github.com/EgoMoose), for [rbx-viewport-window](https://github.com/EgoMoose/rbx-viewport-window).
+- The [ViewportFrame masking](https://devforum.roblox.com/t/viewportframe-masking/2964839) technique from the
+  Roblox DevForum.
 
 ## License
 
-[MIT](LICENSE)
+ViewportStencil is released under the [MIT License](LICENSE).

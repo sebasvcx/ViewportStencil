@@ -4,7 +4,7 @@ export type StencilOptions = {
 	-- Surface size in studs, along the CFrame's X and Z axes. Anything of the model outside it is clipped. Defaults to
 	-- 90% of the model's footprint, so the mask hides the mesh edges.
 	size: Vector2?,
-	-- Seconds until the stencil destroys itself. Defaults to never.
+	-- Seconds until the stencil destroys itself. Defaults to nil (no automatic destruction).
 	lifetime: number?,
 	-- Whether destroying the stencil also destroys the model. Defaults to true; when false the model is unparented.
 	destroyModel: boolean?,
