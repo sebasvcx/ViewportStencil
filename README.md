@@ -31,6 +31,25 @@ ViewportStencil = "aziorux/viewport-stencil@1.0.0"
 
 **Manually**: download `ViewportStencil.rbxm` from the Releases page and put it in `ReplicatedStorage`.
 
+**Just want to try it?** Download `ViewportStencil-Demo.rbxl` from the Releases page, open it in Studio and press Play.
+See [Example](#example).
+
+## Example
+
+The [Releases page](../../releases) has a demo place, `ViewportStencil-Demo.rbxl`, ready to play: click anywhere
+(floor or wall) to spawn a crack that disappears after 10 seconds.
+
+What's in the demo:
+
+- `ReplicatedStorage.ViewportStencil`: the module.
+- `ReplicatedStorage.Assets.Crack.CrackTest`: the crack model from [`example/crack.blend`](example/crack.blend), set up as
+  described in [Making a model](#making-a-model).
+- `ReplicatedStorage.Assets.Crack.VFX`: particles and a purple light spawned with each crack. The light tints nearby
+  stencils; see [Lighting](#lighting).
+- `StarterPlayerScripts.Example`: the script that spawns the cracks, [`example/Example.client.lua`](example/Example.client.lua).
+
+In this repo, `example/` has the demo script and the Blender file for the crack.
+
 ## Usage
 
 ViewportStencil only runs on the client.

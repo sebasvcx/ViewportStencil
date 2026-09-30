@@ -5,3 +5,4 @@ Packages/
 *.rbxl.lock
 *.rbxlx.lock
 *.blend1
+build/
