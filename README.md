@@ -26,7 +26,7 @@ The mask is part of the mesh, so each model defines its own shape. See [Making a
 
 ```toml
 [dependencies]
-ViewportStencil = "sebasvcx/viewport-stencil@1.0.0"
+ViewportStencil = "sebasvcx/viewport-stencil@1.0.1"
 ```
 
 **Manually**: download `ViewportStencil.rbxm` from the Releases page and put it in `ReplicatedStorage`.

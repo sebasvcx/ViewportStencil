@@ -1,6 +1,14 @@
 --!strict
--- ViewportStencil: render models inside surfaces with ViewportFrames. Client only.
--- https://github.com/EgoMoose/rbx-viewport-window + https://devforum.roblox.com/t/viewportframe-masking/2964839
+--[[
+	ViewportStencil v1.0.1
+	Render models inside surfaces with ViewportFrames: ground cracks, holes, portals. Client only.
+
+	Docs and downloads: https://github.com/sebasvcx/ViewportStencil
+	By Aziorux (Sebas_Devv), MIT License
+
+	Based on EgoMoose's rbx-viewport-window (https://github.com/EgoMoose/rbx-viewport-window)
+	and ViewportFrame masking (https://devforum.roblox.com/t/viewportframe-masking/2964839)
+]]
 
 local Renderer = require(script.Renderer)
 local Stencil = require(script.Stencil)
