@@ -1,9 +1,9 @@
 [package]
-name = "aziorux/viewport-stencil"
+name = "sebasvcx/viewport-stencil"
 description = "Render models inside surfaces with ViewportFrames: ground cracks, holes, portals, without cutting anything."
 version = "1.0.0"
 license = "MIT"
 authors = ["Aziorux (Sebas_Devv)"]
 realm = "shared"
 registry = "https://github.com/UpliftGames/wally-index"
-include = ["src", "src/**", "default.project.json", "wally.toml", "LICENSE", "README.md"]
+exclude = ["build", "docs", "example", "dev.project.json", "selene.toml", "stylua.toml", "sourcemap.json", "Packages"]
